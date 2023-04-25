@@ -44,6 +44,8 @@ public final class ThreadPoolBidirectionalPathFinderTest {
     private final List<DirectedGraphNode> disconnectedDelayedDirectedGraph;
     private final List<DirectedGraphNode> disconnectedNondelayedDirectedGraph;
     
+    private final List<DirectedGraphNode> failingNodeGraph;
+    
     private final Random random = new Random(SEED);
     private final AbstractDelayedGraphPathFinder<DirectedGraphNode> 
             testPathFinder = 
@@ -89,6 +91,8 @@ public final class ThreadPoolBidirectionalPathFinderTest {
         
         this.disconnectedNondelayedDirectedGraph =
                 disconnectedGraphPair.nondelayedGraph;
+        
+        this.failingNodeGraph = directedGraphBuilder.getFailingGraph();
     }
     
     // This test may take a several seconds.
@@ -169,6 +173,26 @@ public final class ThreadPoolBidirectionalPathFinderTest {
 
         assertTrue(referencePath.isEmpty());
         assertTrue(testPath.isEmpty());
+    }
+    
+    @Test
+    public void haltsOnFailingNodes() {
+        
+        final DirectedGraphNode sourceNode = 
+                this.failingNodeGraph
+                    .get(random.nextInt(this.failingNodeGraph.size()));
+        
+        final DirectedGraphNode targetNode = 
+                this.failingNodeGraph
+                    .get(random.nextInt(this.failingNodeGraph.size()));
+        
+        testPathFinder.search(sourceNode, 
+                              targetNode,
+                              new FailingForwardNodeExpander(), 
+                              new FailingBackwardNodeExpander(), 
+                              null, 
+                              null, 
+                              null);
     }
 }
 
@@ -261,6 +285,22 @@ final class DirectedGraphBuilder {
         this.maximumDelay = maximumDelay;
         this.random = random;
     }
+    
+    List<DirectedGraphNode> getFailingGraph() {
+        List<DirectedGraphNode> graph = new ArrayList<>();
+        
+        for (int i = 0; i < nodes; i++) {
+            graph.add(new DirectedGraphNode(i, true, Integer.MAX_VALUE));
+        }
+        
+        for (int i = 0; i < 6 * nodes; i++) {
+            final int headNodeIndex = random.nextInt(nodes);
+            final int tailNodeIndex = random.nextInt(nodes);
+            graph.get(tailNodeIndex).addChild(graph.get(headNodeIndex));
+        }
+        
+        return graph;
+    }
   
     GraphPair getDisconnectedGraphPair() {
         List<DirectedGraphNode> delayedDirectedGraph = 
@@ -287,25 +327,6 @@ final class DirectedGraphBuilder {
             delayedDirectedGraph.add(delayedDirectedGraphNode);
             nondelayedDirectedGraph.add(nondelayedDirectedGraphNode);
         }
-        
-//        for (int id = nodes / 2; id < nodes; id++) {
-//            int delayMilliseconds = 
-//                    random.nextInt(maximumDelay - minimumDelay + 1) 
-//                    + 
-//                    minimumDelay;
-//            
-//            DirectedGraphNode delayedDirectedGraphNode = 
-//                    new DirectedGraphNode(
-//                            id, 
-//                            true,
-//                            delayMilliseconds);
-//            
-//            DirectedGraphNode nondelayedDirectedGraphNode =
-//                    new DirectedGraphNode(id);
-//            
-//            delayedDirectedGraph.add(delayedDirectedGraphNode);
-//            nondelayedDirectedGraph.add(nondelayedDirectedGraphNode);
-//        }
         
         final int totalNumberOfArcs =
                 getTotalNumberOfArcs(
@@ -398,8 +419,6 @@ final class DirectedGraphBuilder {
                         minimumNodeDegree, 
                         maximumNodeDegree);
         
-        System.out.println("Total number of arcs: " + totalNumberOfArcs);
-        
         for (int i = 0; i < totalNumberOfArcs; i++) {
             final int tailDirectedGraphNodeId = random.nextInt(nodes);
             final int headDirectedGraphNodeId = random.nextInt(nodes);
@@ -455,6 +474,47 @@ final class GraphPair {
               List<DirectedGraphNode> nondelayedGraph) {
         this.delayedGraph = delayedGraph;
         this.nondelayedGraph = nondelayedGraph;
+    }
+}
+
+final class Utils {
+    
+    static void sleep(int millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ex) {
+            
+        }
+    }
+}
+
+final class FailingForwardNodeExpander
+        extends AbstractNodeExpander<DirectedGraphNode> {
+
+    @Override
+    public List<DirectedGraphNode> expand(final DirectedGraphNode node) {
+        Utils.sleep(1_000_000);
+        return node.getChildren();
+    }
+
+    @Override
+    public boolean isValidNode(final DirectedGraphNode node) {
+        return true;
+    }
+}
+
+final class FailingBackwardNodeExpander
+        extends AbstractNodeExpander<DirectedGraphNode> {
+
+    @Override
+    public List<DirectedGraphNode> expand(final DirectedGraphNode node) {
+        Utils.sleep(1_000_000);
+        return node.getParents();
+    }
+
+    @Override
+    public boolean isValidNode(final DirectedGraphNode node) {
+        return true;
     }
 }
 

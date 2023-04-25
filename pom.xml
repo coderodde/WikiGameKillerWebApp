@@ -5,7 +5,7 @@
     <artifactId>WikiGameKillerWebApp</artifactId>
     <version>1.6</version>
     <packaging>war</packaging>
-    <name>WikiGameKillerWebApp-1.6</name>
+    <name>WikiGameKillerWebApp</name>
     
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -13,7 +13,6 @@
         <endorsed.dir>${project.build.directory}/endorsed</endorsed.dir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <failOnMissingWebXml>false</failOnMissingWebXml>
-        <jakartaee>8.0.0</jakartaee>
     </properties>
     
     <dependencies>
@@ -35,6 +34,12 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.13.2</version>
+        </dependency>
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <version>4.0.1</version>
+            <type>jar</type>
         </dependency>
     </dependencies>
     
@@ -63,8 +68,8 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>2.6</version>
-                <executions>
+                <version>3.5.0</version>
+                <!--<executions>
                     <execution>
                         <phase>validate</phase>
                         <goals>
@@ -84,6 +89,7 @@
                         </configuration>
                     </execution>
                 </executions>
+                                -->
             </plugin>
         </plugins>
     </build>

@@ -2,7 +2,6 @@ package com.github.coderodde.graph.pathfinding.uniform.delayed.impl;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -15,6 +14,7 @@ import com.github.coderodde.graph.pathfinding.uniform.delayed.ProgressLogger;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This class implements a parallel, bidirectional breadth-first search in order
@@ -347,7 +347,8 @@ extends AbstractDelayedGraphPathFinder<N> {
         /**
          * Caches the best known length from the source to the target nodes.
          */
-        private volatile int bestPathLengthSoFar = Integer.MAX_VALUE;
+        private final AtomicInteger bestPathLengthSoFar = 
+                new AtomicInteger(Integer.MAX_VALUE);
 
         /**
          * The best search frontier touch node so far.
@@ -396,8 +397,8 @@ extends AbstractDelayedGraphPathFinder<N> {
                         forwardSearchState .getDistanceMap().get(current) +
                         backwardSearchState.getDistanceMap().get(current);
 
-                if (bestPathLengthSoFar > currentDistance) {
-                    bestPathLengthSoFar = currentDistance;
+                if (bestPathLengthSoFar.get() > currentDistance) {
+                    bestPathLengthSoFar.set(currentDistance);
                     touchNode = current;
                 }
             }
@@ -424,7 +425,7 @@ extends AbstractDelayedGraphPathFinder<N> {
                   forwardSearchState .getDistanceMap().get(forwardSearchHead) +
                   backwardSearchState.getDistanceMap().get(backwardSearchHead);
 
-            return distance > bestPathLengthSoFar;
+            return distance > bestPathLengthSoFar.get();
         }
 
         /**
@@ -433,6 +434,25 @@ extends AbstractDelayedGraphPathFinder<N> {
         synchronized void requestExit() {
             forwardSearchState .requestThreadsToExit();
             backwardSearchState.requestThreadsToExit();
+        }
+        
+        void killAllSlaveThreads() {
+            for (final StoppableThread thread : 
+                    forwardSearchState.runningThreadSet) {
+                
+                if (!thread.isMasterThread()) {
+                    thread.interrupt();
+                }
+            }
+            
+            for (final StoppableThread thread :
+                    backwardSearchState.sleepingThreadSet) {
+                
+                if (!thread.isMasterThread()) {
+                    thread.interrupt();
+                    System.out.println("interrupt " + thread);
+                }
+            }
         }
 
         /**
@@ -618,6 +638,16 @@ extends AbstractDelayedGraphPathFinder<N> {
          * If set to {@code true}, this thread should exit.
          */
         protected volatile boolean exit;
+        
+        protected final boolean isMasterThread;
+        
+        StoppableThread(final boolean isMasterThread) {
+            this.isMasterThread = isMasterThread;
+        }
+        
+        boolean isMasterThread() {
+            return isMasterThread;
+        }
 
         /**
          * Sends a request to finish the work.
@@ -656,8 +686,11 @@ extends AbstractDelayedGraphPathFinder<N> {
          * @param threadSleepTrials   the maximum number of trials to hibernate
          *                            a master thread before giving up.
          */
-        SleepingThread(final int threadSleepDuration,
+        SleepingThread(final boolean isMasterThread,
+                       final int threadSleepDuration,
                        final int threadSleepTrials) {
+            super(isMasterThread);
+            this.sleepRequested = false;
             this.threadSleepDuration = threadSleepDuration;
             this.threadSleepTrials   = threadSleepTrials;
         }
@@ -751,7 +784,10 @@ extends AbstractDelayedGraphPathFinder<N> {
                      final ProgressLogger<N> searchProgressLogger,
                      final int threadSleepDuration,
                      final int threadSleepTrials) {
-            super(threadSleepDuration, threadSleepTrials);
+            super(isMasterThread, 
+                  threadSleepDuration, 
+                  threadSleepTrials);
+            
             this.id                   = id;
             this.nodeExpander         = nodeExpander;
             this.searchState          = searchState;
@@ -791,6 +827,10 @@ extends AbstractDelayedGraphPathFinder<N> {
             return "[Thread ID: " + id + "]";
         }
 
+        boolean isMasterThread() {
+            return isMasterThread;
+        }
+        
         /**
          * Returns the number of nodes expanded by this search thread.
          * 
@@ -845,6 +885,10 @@ extends AbstractDelayedGraphPathFinder<N> {
                   threadSleepDuration,
                   threadSleepTrials);
         }
+        
+        boolean isMasterThread() {
+            return isMasterThread;
+        }
 
         @Override
         public void run() {
@@ -885,7 +929,9 @@ extends AbstractDelayedGraphPathFinder<N> {
                         }
 
                         if (current == null) {
+                            System.out.println(this + " is exiting.");
                             sharedSearchState.requestExit();
+                            sharedSearchState.killAllSlaveThreads();
                             return;
                         } else {
                             searchState.wakeupAllThreads();
@@ -917,6 +963,10 @@ extends AbstractDelayedGraphPathFinder<N> {
 
                 numberOfExpandedNodes++; 
 
+                if (isMasterThread) {
+                    continue;
+                }
+                
                 // Expand the current node:
                 for (final N child : nodeExpander.expand(current)) {
                     if (!DISTANCE.containsKey(child)) {
@@ -1023,7 +1073,9 @@ extends AbstractDelayedGraphPathFinder<N> {
                         }
 
                         if (current == null) {
+                            System.out.println("Back " + this + " is exitting.");
                             sharedSearchState.requestExit();
+                            sharedSearchState.killAllSlaveThreads();
                             return;
                         } else {
                             searchState.wakeupAllThreads();
@@ -1055,6 +1107,11 @@ extends AbstractDelayedGraphPathFinder<N> {
 
                 numberOfExpandedNodes++;
 
+                if (isMasterThread) {
+                    // Go back to the main expansion loop:
+                    continue;
+                }
+                
                 // Expand the current node:
                 for (final N parent : nodeExpander.expand(current)) {
                     if (!DISTANCE.containsKey(parent)) {
