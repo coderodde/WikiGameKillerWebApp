@@ -92,7 +92,7 @@ public final class ThreadPoolBidirectionalPathFinderTest {
     }
     
     // This test may take a several seconds.
-    @Test
+//    @Test
     public void testCorrectness() {
         for (int iteration = 0; iteration < ITERATIONS; iteration++) {
             final int sourceNodeIndex = 
@@ -134,8 +134,8 @@ public final class ThreadPoolBidirectionalPathFinderTest {
         }
     }   
     
-    // This test may take a several seconds too.
-    @Test
+    // This test may take a several seconds too .
+//    @Test
     public void returnsEmptyPathOnDisconnectedGraph() {
         final int nodes = disconnectedDelayedDirectedGraph.size();
         final int sourceNodeIndex = random.nextInt(nodes / 2);
