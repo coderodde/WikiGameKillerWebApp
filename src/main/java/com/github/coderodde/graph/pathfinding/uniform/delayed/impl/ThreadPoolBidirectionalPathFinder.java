@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import com.github.coderodde.graph.pathfinding.uniform.delayed.AbstractDelayedGraphPathFinder;
 import com.github.coderodde.graph.pathfinding.uniform.delayed.AbstractNodeExpander;
 import com.github.coderodde.graph.pathfinding.uniform.delayed.ProgressLogger;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Queue;
 
@@ -447,7 +448,7 @@ extends AbstractDelayedGraphPathFinder<N> {
                     sharedProgressLogger.onTargetUnreachable(source, target);
                 }
 
-                return new ArrayList<>();
+                return Arrays.asList();
             }
 
             final Map<N, N> parentMapForward = 
@@ -1076,7 +1077,7 @@ extends AbstractDelayedGraphPathFinder<N> {
             }
         }
     }
-    
+        
     /**
      * This method puts the calling thread to sleep for {@code milliseconds}
      * milliseconds.
