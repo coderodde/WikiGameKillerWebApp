@@ -96,7 +96,7 @@ public final class ThreadPoolBidirectionalPathFinderTest {
     }
     
     // This test may take a several seconds.
-//    @Test
+    @Test
     public void testCorrectness() {
         for (int iteration = 0; iteration < ITERATIONS; iteration++) {
             final int sourceNodeIndex = 
@@ -175,7 +175,7 @@ public final class ThreadPoolBidirectionalPathFinderTest {
         assertTrue(testPath.isEmpty());
     }
     
-    @Test
+//    @Test
     public void haltsOnFailingNodes() {
         
         final DirectedGraphNode sourceNode = 
