@@ -418,13 +418,7 @@ extends AbstractDelayedGraphPathFinder<N> {
                 System.out.println("STUCK!");
             }
             
-            try {
-                mutex.acquire();
-            } catch (InterruptedException ex) {
-                System.out.println("mutex threw");
-            }
-            
-//            mutex.acquireUninterruptibly();
+            mutex.acquireUninterruptibly();
         }
         
         /**
@@ -525,14 +519,11 @@ extends AbstractDelayedGraphPathFinder<N> {
          * @throws Exception if mutex acquisition fails.
          */
         List<N> getPath() {
-            lock();
-            
             if (touchNode == null) {
                 if (sharedProgressLogger != null) {
                     sharedProgressLogger.onTargetUnreachable(source, target);
                 }
                 System.out.println("shit fdsfds ");
-                unlock();
                 return new ArrayList<>();
             }
             
@@ -558,7 +549,6 @@ extends AbstractDelayedGraphPathFinder<N> {
             }
 
             System.out.println("what " + path);
-            unlock();
             return path;
         }
     }
