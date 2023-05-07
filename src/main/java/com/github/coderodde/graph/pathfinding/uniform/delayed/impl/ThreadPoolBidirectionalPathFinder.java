@@ -1017,11 +1017,11 @@ extends AbstractDelayedGraphPathFinder<N> {
                             unlock();
                         }
                         
-                        lock();
-                        System.out.println("eyfesdds");
-                        current = searchState.getQueueHead();
-                        System.out.println(current);
-                        unlock();
+//                        lock();
+//                        System.out.println("eyfesdds");
+//                        current = searchState.getQueueHead();
+//                        System.out.println(current);
+//                        unlock();
                         
                         if (current == null) {
                             sharedSearchState.requestExit();
@@ -1062,6 +1062,7 @@ extends AbstractDelayedGraphPathFinder<N> {
                 // path constructed:
                 if (sharedSearchState.pathIsOptimal()) {
                     sharedSearchState.requestExit();
+                    sharedSearchState.killAllThreads();
                     unlock();
                     return;
                 }
@@ -1180,12 +1181,11 @@ extends AbstractDelayedGraphPathFinder<N> {
                             
                             if ((current = searchState.getQueueHead())
                                     != null) {
-                                unlock();
                                 break;
                             }
-                            
-                            unlock();
                         }
+                        
+                        unlock();
 
                         if (current == null) {
                             sharedSearchState.requestExit();
