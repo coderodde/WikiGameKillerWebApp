@@ -20,7 +20,7 @@ extends AbstractWikipediaGraphNodeExpander {
     }
     
     @Override
-    public List<String> expand(final String node) {
+    public List<String> generateSuccessors(final String node) {
         return baseGetNeighbors(node, false);
     }
 }

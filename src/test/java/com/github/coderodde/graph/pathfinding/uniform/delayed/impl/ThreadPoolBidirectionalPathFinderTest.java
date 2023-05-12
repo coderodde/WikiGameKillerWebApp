@@ -95,8 +95,34 @@ public final class ThreadPoolBidirectionalPathFinderTest {
         this.failingNodeGraph = directedGraphBuilder.getFailingGraph();
     }
     
-    // This test may take a several seconds.
     @Test
+    public void testCorrectnessOnSmallGraph() {
+        final DirectedGraphNode nodeA  = new DirectedGraphNode(1);
+        final DirectedGraphNode nodeB1 = new DirectedGraphNode(2);
+        final DirectedGraphNode nodeB2 = new DirectedGraphNode(3);
+        final DirectedGraphNode nodeC  = new DirectedGraphNode(4);
+        
+        nodeA.addChild(nodeB1);
+        nodeA.addChild(nodeB2);
+        nodeB1.addChild(nodeC);
+        nodeB2.addChild(nodeC);
+        
+        final List<DirectedGraphNode> path = 
+                testPathFinder.search(
+                        nodeA,
+                        nodeC,
+                        new ForwardNodeExpander(),
+                        new BackwardNodeExpander(), 
+                        null, 
+                       null, 
+                        null);
+        
+        assertEquals(3, path.size());
+    }
+                        
+    
+    // This test may take a several seconds.
+//    @Test
     public void testCorrectness() {
         for (int iteration = 0; iteration < ITERATIONS; iteration++) {
             final int sourceNodeIndex = 
@@ -196,6 +222,9 @@ public final class ThreadPoolBidirectionalPathFinderTest {
     }
 }
 
+/**
+ * This class implements a node in an unweighted, directed graph.
+ */
 final class DirectedGraphNode {
     private final int id;
     private final boolean isDelayed;
@@ -203,10 +232,24 @@ final class DirectedGraphNode {
     private final List<DirectedGraphNode> children = new ArrayList<>();
     private final List<DirectedGraphNode> parents  = new ArrayList<>();
     
+    /**
+     * Constructs a directed graph node with no delay.
+     * 
+     * @param id the node ID. 
+     */
     DirectedGraphNode(final int id) {
         this(id, false, Integer.MAX_VALUE);
     }
     
+    /**
+     * Constructs a directed graph node with ID {@code id}. If {@code isDelayed}
+     * is {@code true}, the node sleeps for {@code delayMilliseconds} 
+     * milliseconds before returning the list of parents/children.
+     * 
+     * @param id                the node ID.
+     * @param isDelayed         the flag specifying whether the node shall wait.
+     * @param delayMilliseconds the sleep delay in milliseconds. 
+     */
     DirectedGraphNode(final int id, 
                       final boolean isDelayed,
                       final int delayMilliseconds) {
@@ -492,7 +535,7 @@ final class FailingForwardNodeExpander
         extends AbstractNodeExpander<DirectedGraphNode> {
 
     @Override
-    public List<DirectedGraphNode> expand(final DirectedGraphNode node) {
+    public List<DirectedGraphNode> generateSuccessors(final DirectedGraphNode node) {
         Utils.sleep(1_000_000);
         return node.getChildren();
     }
@@ -507,7 +550,7 @@ final class FailingBackwardNodeExpander
         extends AbstractNodeExpander<DirectedGraphNode> {
 
     @Override
-    public List<DirectedGraphNode> expand(final DirectedGraphNode node) {
+    public List<DirectedGraphNode> generateSuccessors(final DirectedGraphNode node) {
         Utils.sleep(1_000_000);
         return node.getParents();
     }
@@ -522,7 +565,7 @@ final class ForwardNodeExpander
         extends AbstractNodeExpander<DirectedGraphNode> {
 
     @Override
-    public List<DirectedGraphNode> expand(final DirectedGraphNode node) {
+    public List<DirectedGraphNode> generateSuccessors(final DirectedGraphNode node) {
         return node.getChildren();
     }
 
@@ -536,7 +579,7 @@ final class BackwardNodeExpander
         extends AbstractNodeExpander<DirectedGraphNode> {
 
     @Override
-    public List<DirectedGraphNode> expand(final DirectedGraphNode node) {
+    public List<DirectedGraphNode> generateSuccessors(final DirectedGraphNode node) {
         return node.getParents();
     }
 

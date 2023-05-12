@@ -1,15 +1,15 @@
 package com.github.coderodde.graph.pathfinding.uniform.delayed.impl;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Queue;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Logger;
 import java.util.logging.Level;
@@ -25,7 +25,7 @@ import com.github.coderodde.graph.pathfinding.uniform.delayed.ProgressLogger;
  * order to speed up the computation: for each search direction (forward and 
  * backward), the algorithm maintains concurrent state, such as the frontier 
  * queue; many threads may pop the queue, expand the node and append the 
- * neighbors to that queue.
+ * neighbours to that queue.
  * 
  * @author Rodion "rodde" Efremov
  * @version 1.6 (Aug 4, 2016)
@@ -57,19 +57,19 @@ extends AbstractDelayedGraphPathFinder<N> {
      * The minimum number of threads to allow. One thread per each of the two
      * search directions.
      */
-    private static final int MINIMUM_NUMBER_OF_THREADS = 2;
+    private static final int MINIMUM_NUMBER_OF_THREADS = 4;
 
     /**
      * The minimum number of milliseconds a <b>master thread</b> sleeps when it 
      * finds the frontier queue empty.
      */
-    private static final int MINIMUM_MASTER_THREAD_SLEEP_DURATION = 3;
+    private static final int MINIMUM_MASTER_THREAD_SLEEP_DURATION = 1;
 
     /**
      * The minimum number of milliseconds a <b>slave thread</b> sleeps when it 
      * finds the frontier queue empty.
      */
-    private static final int MINIMUM_SLAVE_THREAD_SLEEP_DURATION = 3;
+    private static final int MINIMUM_SLAVE_THREAD_SLEEP_DURATION = 1;
 
     /**
      * The lower bound on the amount of trials.
@@ -215,7 +215,7 @@ extends AbstractDelayedGraphPathFinder<N> {
                                         target, 
                                         sharedSearchProgressLogger);
 
-        // Create the state object shared by all the threads working on forward
+        // Create the state obj6/ect shared by all the threads working on forward
         // search direction:
         final SearchState<N> forwardSearchState = 
                 new SearchState<>(source,
@@ -437,11 +437,18 @@ extends AbstractDelayedGraphPathFinder<N> {
          * @throws Exception if mutex acquisition fails.
          */
         void lock() {
-            if (mutex.availablePermits() == 0) {
-                System.out.println("STUCK!");
-            }
             
-            mutex.acquireUninterruptibly();
+            try {
+                mutex.acquire();
+            } catch (InterruptedException ex) {
+                final String exceptionMessage =
+                        "Mutex lock threw, permits = " 
+                        + mutex.availablePermits() 
+                        + ".";
+                
+                LOGGER.log(Level.SEVERE, exceptionMessage);
+                throw new RuntimeException();
+            }
         }
         
         /**
@@ -484,7 +491,6 @@ extends AbstractDelayedGraphPathFinder<N> {
          * @throws Exception if mutex acquisition fails.
          */
         void updateSearchState(final N current) {
-            System.out.println("1");
             if (forwardSearchState.containsNode(current) &&
                 backwardSearchState.containsNode(current)) {
                 
@@ -495,6 +501,7 @@ extends AbstractDelayedGraphPathFinder<N> {
                 if (bestPathLengthSoFar > currentDistance) {
                     bestPathLengthSoFar = currentDistance;
                     touchNode = current;
+                    System.out.println("fdds = " + bestPathLengthSoFar);
                 }
             }
             System.out.println("yeah " + bestPathLengthSoFar);
@@ -547,7 +554,8 @@ extends AbstractDelayedGraphPathFinder<N> {
                 if (sharedProgressLogger != null) {
                     sharedProgressLogger.onTargetUnreachable(source, target);
                 }
-                System.out.println("shit fdsfds ");
+                
+                LOGGER.log(Level.INFO, "Returning empty path.");
                 return new ArrayList<>();
             }
             
@@ -572,7 +580,11 @@ extends AbstractDelayedGraphPathFinder<N> {
                 sharedProgressLogger.onShortestPath(path);
             }
 
-            System.out.println("what " + path);
+            LOGGER.log(
+                    Level.INFO, 
+                    "Returning a path of {0} nodes.", 
+                    path.size());
+            
             return path;
         }
     }
@@ -582,13 +594,17 @@ extends AbstractDelayedGraphPathFinder<N> {
      */
     private static final class SearchState<N> {
         
+        /**
+         * The shared search direction. Contains the facilities relating to both
+         * of the search directions.
+         */
         private final SharedSearchState<N> sharedSearchState;
 
         /**
          * This FIFO queue contains the queue of nodes reached but not yet 
          * expanded. It is called the <b>search frontier</b>.
          */
-        private final Queue<N> queue = new ArrayDeque<>();
+        private final Deque<N> queue = new ArrayDeque<>();
         
         /**
          * This map maps each discovered node to its predecessor on the shortest 
@@ -652,11 +668,11 @@ extends AbstractDelayedGraphPathFinder<N> {
             return distance.containsKey(node);
         }
         
-        Integer getDistance(N node) {
+        Integer getDistance(final N node) {
             return distance.get(node);
         }
         
-        N getParent(N node) {
+        N getParent(final N node) {
             return parents.get(node);
         }
         
@@ -679,23 +695,18 @@ extends AbstractDelayedGraphPathFinder<N> {
             
             distance.put(node, distance.get(predecessor) + 1);
             parents.put(node, predecessor);
-            queue.add(node);
+            queue.addLast(node);
             return true;
         }
         
-        private void tryUpdateIfImprovementPossible(final N node, final N predecessor) {
+        private void tryUpdateIfImprovementPossible(
+                final N node, 
+                final N predecessor) {
+            
             if (distance.get(node) > distance.get(predecessor) + 1) {
                 distance.put(node, distance.get(predecessor) + 1);
                 parents.put(node, predecessor);
             }
-        }
-
-        private void lock() {
-            sharedSearchState.lock();
-        }
-        
-        private void unlock() {
-            sharedSearchState.unlock();
         }
         
         /**
@@ -715,9 +726,9 @@ extends AbstractDelayedGraphPathFinder<N> {
          * @param thread the <b>slave</b> thread to hibernate.
          */
         void putThreadToSleep(final SleepingThread thread) {
+            thread.putThreadToSleep(true);
             runningThreadSet.remove(thread);
             sleepingThreadSet.add(thread);
-            thread.putThreadToSleep(true);
         }
         
         /**
@@ -826,7 +837,8 @@ extends AbstractDelayedGraphPathFinder<N> {
      * 
      * @param <N> the actual node type.
      */
-    private abstract static class AbstractSearchThread<N> extends SleepingThread {
+    private abstract static class AbstractSearchThread<N> 
+            extends SleepingThread {
 
         /**
          * The ID of this thread.
@@ -866,7 +878,7 @@ extends AbstractDelayedGraphPathFinder<N> {
          * @param id                   the ID number of this thread. Must be
          *                             unique over <b>all</b> search threads.
          * @param nodeExpander         the node expander responsible for 
-         *                             generating the neighbors in this search
+         *                             generating the neighbours in this search
          *                             thread.
          * @param searchState          the search state object.
          * @param sharedSearchState    the search state object shared with both
@@ -918,84 +930,13 @@ extends AbstractDelayedGraphPathFinder<N> {
                 }
                 
                 lock();
-                N current = searchState.getQueueHead();
+                N current = searchState.removeQueueHead();
                 unlock();
                 
                 if (current != null) {
-                    if (!isMasterThread) {
-                        lock();
-                        searchState.wakeupAllThreads();
-                        sharedSearchState.updateSearchState(current);
-                        
-                        if (sharedSearchState.pathIsOptimal()) {
-                            sharedSearchState.requestExit();
-                            sharedSearchState.killAllThreads();
-                            unlock();
-                            return;
-                        }
-                        
-                        unlock();
-                        
-                        if (searchProgressLogger != null) {
-                            searchProgressLogger.onExpansion(current);
-                        }
-                       
-                        numberOfExpandedNodes++;
-                        
-                        // Expand the current node:
-                        for (final N child : nodeExpander.expand(current)) {
-                            lock();
-
-                            if (!searchState.trySetNodeInfo(
-                                    child, 
-                                    current)) {
-                                
-                                if (searchProgressLogger != null) {
-                                    searchProgressLogger
-                                            .onNeighborGeneration(child);
-                                }
-                            } else {
-                                if (searchProgressLogger != null) {
-                                    searchProgressLogger.onNeighborImprovement(
-                                            child);
-                                }
-
-                                searchState.tryUpdateIfImprovementPossible(
-                                        child,
-                                        current);
-                            }
-
-                            unlock();
-                        }
-                    }
+                    processCurrent(current);
                 } else {
-                    if (isMasterThread) {
-                        for (int trials = 0; 
-                                trials < threadSleepTrials; 
-                                trials++) {
-                            mysleep(threadSleepDuration);
-                            
-                            lock();
-                            current = searchState.getQueueHead();
-                            unlock();
-                            
-                            if (current != null) {
-                                break;
-                            }
-                        }
-                        
-                        if (current == null) {
-                            // Once here, the master forward thread could not 
-                            // obtain new frontier elements:
-                            sharedSearchState.requestExit();
-                            sharedSearchState.killAllThreads();
-                            return;
-                        } else if (!isMasterThread) {
-                            lock();
-                            searchState.wakeupAllThreads();
-                            unlock();
-                        }
-                    }
+                    processEmptyQueue();
                 }
             }
         }
@@ -1047,6 +988,116 @@ extends AbstractDelayedGraphPathFinder<N> {
         
         private void unlock() {
             sharedSearchState.unlock();
+        }
+        
+        private void processCurrent(final N current) {
+            if (isMasterThread) {
+                processCurrentInMasterThread(current);
+            } else {
+                processCurrentInSlaveThread(current);
+            }
+        }
+        
+        private void processEmptyQueue() {
+            if (isMasterThread) {
+                processCurrentInMasterThread(null);
+            } else {
+                processCurrentInSlaveThread(null);
+            }
+        }
+        
+        /**
+         * Processes the current node in the master thread.
+         * 
+         * @param head the candidate frontier queue head node.
+         */
+        private void processCurrentInMasterThread(final N head) {
+            if (head != null) {
+                return;
+            }
+            
+            N currentHead = null;
+            
+            for (int trials = 0; trials < threadSleepTrials; trials++) {
+                mysleep(threadSleepDuration);
+                
+                lock();
+                currentHead = searchState.getQueueHead();
+                unlock();
+                
+                if (currentHead != null) {
+                    break;
+                }
+            }
+            
+            if (currentHead == null) {
+                // We have run out of trials and the queue is still empty; halt.
+                sharedSearchState.requestExit();
+                sharedSearchState.killAllThreads();
+            }
+        }
+        
+        private void processCurrentInSlaveThread(final N current) {
+            if (current == null) {
+                // Nothing to do, go to sleep.
+                searchState.putThreadToSleep(this);
+                return;
+            }
+            
+            searchState.wakeupAllThreads();
+            lock();
+            sharedSearchState.updateSearchState(current);
+            
+            if (sharedSearchState.pathIsOptimal()) {
+                unlock();
+                sharedSearchState.requestExit();
+                sharedSearchState.killAllThreads();
+                return;
+            }
+            
+            unlock();
+            
+            if (searchProgressLogger != null) {
+                searchProgressLogger.onExpansion(current);
+            }
+            
+            numberOfExpandedNodes++;
+            
+            expand(current);
+        }
+        
+        /**
+         * Expands the current node.
+         * 
+         * @param current the node of which to generate the successor nodes.
+         */
+        private void expand(final N current) {
+            for (final N successor : 
+                    nodeExpander.generateSuccessors(current)) {
+                
+                lock();
+                
+                if (!searchState.trySetNodeInfo(
+                        successor, 
+                        current)) {
+                    
+                    if (searchProgressLogger != null) {
+                        searchProgressLogger
+                                .onNeighborGeneration(successor);
+                    }
+                } else {
+                    if (searchProgressLogger != null) {
+                        searchProgressLogger
+                                .onNeighborImprovement(successor);
+                    }
+                    
+                    searchState.tryUpdateIfImprovementPossible(
+                            successor,
+                            current);
+                }
+                
+                unlock();
+            }
         }
     }
     
@@ -1110,7 +1161,7 @@ extends AbstractDelayedGraphPathFinder<N> {
          * @param id                   the ID of this thread. Must be unique 
          *                             over <b>all</b> search threads.
          * @param nodeExpander         the node expander responsible for 
-         *                             generating the neighbor nodes of a given
+         *                             generating the neighbour nodes of a given
          *                             node.
          * @param searchState          the search state object.
          * @param sharedSearchState    the shared search state object.

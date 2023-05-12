@@ -155,7 +155,7 @@ extends AbstractNodeExpander<String> {
      */
     @Override
     public boolean isValidNode(final String node) {
-        return !expand(node).isEmpty();
+        return !generateSuccessors(node).isEmpty();
     }
     
     /**

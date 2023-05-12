@@ -20,7 +20,7 @@ public abstract class AbstractNodeExpander<N> {
      * @return the list of neighbor nodes or {@code null} if the node 
      *         {@code node} is invalid.
      */
-    public abstract List<N> expand(final N node);
+    public abstract List<N> generateSuccessors(final N node);
 
     /**
      * Checks that the input node {@code node} is a valid node in the graph.
